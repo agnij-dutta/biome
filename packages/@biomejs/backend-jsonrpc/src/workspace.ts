@@ -3041,6 +3041,11 @@ export interface Nursery {
 	 */
 	useLogicalProperties?: UseLogicalPropertiesConfiguration;
 	/**
+	 * Require test and test suite titles to start with a lowercase letter.
+	 * See https://biomejs.dev/linter/rules/use-lowercase-test-title
+	 */
+	useLowercaseTestTitle?: UseLowercaseTestTitleConfiguration;
+	/**
 	 * Prefer Math.min() and Math.max() over ternaries for simple comparisons.
 	 * See https://biomejs.dev/linter/rules/use-math-min-max
 	 */
@@ -5389,6 +5394,9 @@ export type UseLayeredStylesConfiguration =
 export type UseLogicalPropertiesConfiguration =
 	| RulePlainConfiguration
 	| RuleWithUseLogicalPropertiesOptions;
+export type UseLowercaseTestTitleConfiguration =
+	| RulePlainConfiguration
+	| RuleWithUseLowercaseTestTitleOptions;
 export type UseMathMinMaxConfiguration =
 	| RulePlainConfiguration
 	| RuleWithUseMathMinMaxOptions;
@@ -7835,6 +7843,14 @@ export interface RuleWithUseLogicalPropertiesOptions {
 	level: RulePlainConfiguration;
 	options?: UseLogicalPropertiesOptions;
 }
+export interface RuleWithUseLowercaseTestTitleOptions {
+	/**
+	 * Controls the applicability of the rule's fix. `none` suppresses the fix, while `safe` and `unsafe` reclassify its applicability. This setting does not change the fix itself.
+	 */
+	fix?: FixKind;
+	level: RulePlainConfiguration;
+	options?: UseLowercaseTestTitleOptions;
+}
 export interface RuleWithUseMathMinMaxOptions {
 	/**
 	 * Controls the applicability of the rule's fix. `none` suppresses the fix, while `safe` and `unsafe` reclassify its applicability. This setting does not change the fix itself.
@@ -10049,6 +10065,7 @@ export interface UseLogicalPropertiesOptions {
 	 */
 	direction?: UseLogicalPropertiesDirection;
 }
+export type UseLowercaseTestTitleOptions = {};
 export type UseMathMinMaxOptions = {};
 export type UseModernMathApisOptions = {};
 export type UseNamedCaptureGroupOptions = {};
@@ -11447,6 +11464,7 @@ export type Category =
 	| "lint/nursery/useJsxCurlyBraceConvention"
 	| "lint/nursery/useLayeredStyles"
 	| "lint/nursery/useLogicalProperties"
+	| "lint/nursery/useLowercaseTestTitle"
 	| "lint/nursery/useMathMinMax"
 	| "lint/nursery/useMaxParams"
 	| "lint/nursery/useModernMathApis"

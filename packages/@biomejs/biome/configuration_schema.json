@@ -4966,6 +4966,16 @@
 			"type": "object",
 			"additionalProperties": false
 		},
+		"NoNestedTemplateLiteralsConfiguration": {
+			"oneOf": [
+				{ "$ref": "#/$defs/RulePlainConfiguration" },
+				{ "$ref": "#/$defs/RuleWithNoNestedTemplateLiteralsOptions" }
+			]
+		},
+		"NoNestedTemplateLiteralsOptions": {
+			"type": "object",
+			"additionalProperties": false
+		},
 		"NoNestedTernaryConfiguration": {
 			"oneOf": [
 				{ "$ref": "#/$defs/RulePlainConfiguration" },
@@ -7261,6 +7271,13 @@
 					"description": "Disallow negated expressions on the left side of an equality check.\nSee https://biomejs.dev/linter/rules/no-negation-in-equality-check",
 					"anyOf": [
 						{ "$ref": "#/$defs/NoNegationInEqualityCheckConfiguration" },
+						{ "type": "null" }
+					]
+				},
+				"noNestedTemplateLiterals": {
+					"description": "Disallow template literals inside other template literals.\nSee https://biomejs.dev/linter/rules/no-nested-template-literals",
+					"anyOf": [
+						{ "$ref": "#/$defs/NoNestedTemplateLiteralsConfiguration" },
 						{ "type": "null" }
 					]
 				},
@@ -10489,6 +10506,15 @@
 			"properties": {
 				"level": { "$ref": "#/$defs/RulePlainConfiguration" },
 				"options": { "$ref": "#/$defs/NoNestedPromisesOptions" }
+			},
+			"additionalProperties": false,
+			"required": ["level"]
+		},
+		"RuleWithNoNestedTemplateLiteralsOptions": {
+			"type": "object",
+			"properties": {
+				"level": { "$ref": "#/$defs/RulePlainConfiguration" },
+				"options": { "$ref": "#/$defs/NoNestedTemplateLiteralsOptions" }
 			},
 			"additionalProperties": false,
 			"required": ["level"]

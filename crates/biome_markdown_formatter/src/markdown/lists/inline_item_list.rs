@@ -4,7 +4,7 @@ use crate::markdown::auxiliary::inline_italic::FormatMdInlineItalicOptions;
 use crate::markdown::auxiliary::textual::FormatMdTextualOptions;
 use crate::prelude::*;
 use crate::shared::{TextContext, TextPrintMode, TrimMode};
-use crate::words::{ProseItem, ProseItemList};
+use crate::words::{ProseItem, ProseItemList, WordGroup};
 use biome_formatter::Format;
 use biome_markdown_syntax::MdBullet;
 
@@ -32,6 +32,40 @@ impl Format<MarkdownFormatContext> for FormatSourceLine<'_> {
         Ok(())
     }
 }
+
+fn separator_run_end(items: &[ProseItem], start: usize) -> usize {
+    items[start..]
+        .iter()
+        .position(|item| {
+            !matches!(
+                item,
+                ProseItem::Space | ProseItem::SoftBreak | ProseItem::OutdentedLineStart
+            )
+        })
+        .map_or(items.len(), |offset| start + offset)
+}
+
+fn preserved_soft_break_end(items: &[ProseItem], start: usize) -> Option<usize> {
+    let end = separator_run_end(items, start);
+    if !items[start..end]
+        .iter()
+        .any(|item| matches!(item, ProseItem::SoftBreak))
+    {
+        return None;
+    }
+
+    let (Some(ProseItem::WordGroup(before)), Some(ProseItem::WordGroup(after))) = (
+        start.checked_sub(1).and_then(|index| items.get(index)),
+        items.get(end),
+    ) else {
+        return None;
+    };
+
+    before
+        .should_preserve_segment_break_before(after)
+        .then_some(end)
+}
+
 fn outdented_list_marker_lines(
     node: &MdInlineItemList,
     content_indent: usize,
@@ -935,22 +969,35 @@ impl FormatMdInlineItemList {
 
     fn fmt_prose_never(&self, items: &[ProseItem], f: &mut MarkdownFormatter) -> FormatResult<()> {
         let mut segment_start = 0;
+        let mut index = 0;
 
-        for (index, item) in items.iter().enumerate() {
-            let ProseItem::HardBreak(hard_break) = item else {
-                continue;
-            };
-
-            FormatSourceLine(&items[segment_start..index]).fmt(f)?;
-            write!(
-                f,
-                [hard_break
-                    .format()
-                    .with_options(FormatMdFormatHardLineOptions {
-                        print_mode: TextPrintMode::fill(),
-                    })]
-            )?;
-            segment_start = index + 1;
+        while index < items.len() {
+            match &items[index] {
+                ProseItem::HardBreak(hard_break) => {
+                    FormatSourceLine(&items[segment_start..index]).fmt(f)?;
+                    write!(
+                        f,
+                        [hard_break
+                            .format()
+                            .with_options(FormatMdFormatHardLineOptions {
+                                print_mode: TextPrintMode::fill(),
+                            })]
+                    )?;
+                    segment_start = index + 1;
+                    index += 1;
+                }
+                ProseItem::Space | ProseItem::SoftBreak | ProseItem::OutdentedLineStart => {
+                    if let Some(end) = preserved_soft_break_end(items, index) {
+                        FormatSourceLine(&items[segment_start..index]).fmt(f)?;
+                        write!(f, [hard_line_break()])?;
+                        segment_start = end;
+                        index = end;
+                    } else {
+                        index = separator_run_end(items, index);
+                    }
+                }
+                ProseItem::WordGroup(_) => index += 1,
+            }
         }
 
         FormatSourceLine(&items[segment_start..]).fmt(f)
@@ -958,22 +1005,35 @@ impl FormatMdInlineItemList {
 
     fn fmt_prose_always(&self, items: &[ProseItem], f: &mut MarkdownFormatter) -> FormatResult<()> {
         let mut segment_start = 0;
+        let mut index = 0;
 
-        for (index, item) in items.iter().enumerate() {
-            let ProseItem::HardBreak(hard_break) = item else {
-                continue;
-            };
-
-            Self::format_fill_segment(&items[segment_start..index], f)?;
-            write!(
-                f,
-                [hard_break
-                    .format()
-                    .with_options(FormatMdFormatHardLineOptions {
-                        print_mode: TextPrintMode::fill(),
-                    })]
-            )?;
-            segment_start = index + 1;
+        while index < items.len() {
+            match &items[index] {
+                ProseItem::HardBreak(hard_break) => {
+                    Self::format_fill_segment(&items[segment_start..index], f)?;
+                    write!(
+                        f,
+                        [hard_break
+                            .format()
+                            .with_options(FormatMdFormatHardLineOptions {
+                                print_mode: TextPrintMode::fill(),
+                            })]
+                    )?;
+                    segment_start = index + 1;
+                    index += 1;
+                }
+                ProseItem::Space | ProseItem::SoftBreak | ProseItem::OutdentedLineStart => {
+                    if let Some(end) = preserved_soft_break_end(items, index) {
+                        Self::format_fill_segment(&items[segment_start..index], f)?;
+                        write!(f, [hard_line_break()])?;
+                        segment_start = end;
+                        index = end;
+                    } else {
+                        index = separator_run_end(items, index);
+                    }
+                }
+                ProseItem::WordGroup(_) => index += 1,
+            }
         }
 
         Self::format_fill_segment(&items[segment_start..], f)
@@ -983,12 +1043,18 @@ impl FormatMdInlineItemList {
         let no_separator = format_with(|_| Ok(()));
         let mut fill = f.fill();
         let mut has_separator = false;
+        let mut previous_group = None;
 
         for item in items {
             match item {
                 ProseItem::Space | ProseItem::SoftBreak => has_separator = true,
                 ProseItem::WordGroup(group) => {
-                    if group.starts_with_block_marker() {
+                    if group.starts_with_block_marker()
+                        || (has_separator
+                            && previous_group.is_some_and(|previous: &WordGroup| {
+                                previous.should_preserve_segment_break_before(group)
+                            }))
+                    {
                         fill.entry(&space(), group);
                     } else if has_separator {
                         fill.entry(&soft_line_break_or_space(), group);
@@ -996,6 +1062,7 @@ impl FormatMdInlineItemList {
                         fill.entry(&no_separator, group);
                     }
                     has_separator = false;
+                    previous_group = Some(group);
                 }
                 ProseItem::HardBreak(_) | ProseItem::OutdentedLineStart => {}
             }
